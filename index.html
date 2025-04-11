@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Health Monitoring System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        /* Authentication Styles */
+        .auth-container {
+            max-width: 500px;
+            margin: 5% auto;
+            padding: 30px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+        }
+        .auth-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .auth-header h2 {
+            color: #4e73df;
+            font-weight: 700;
+        }
+        .auth-header p {
+            color: #858796;
+        }
+        .auth-logo {
+            font-size: 2.5rem;
+            color: #4e73df;
+            margin-bottom: 15px;
+        }
+        .form-control {
+            height: 45px;
+            border-radius: 8px;
+        }
+        .btn-auth {
+            background-color: #4e73df;
+            border: none;
+            height: 45px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .btn-auth:hover {
+            background-color: #2e59d9;
+        }
+        .auth-footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #858796;
+        }
+        .auth-link {
+            color: #4e73df;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .auth-link:hover {
+            text-decoration: underline;
+        }
+        
+        /* Dashboard Styles */
+        :root {
+            --primary: #4e73df;
+            --success: #1cc88a;
+            --info: #36b9cc;
+            --warning: #f6c23e;
+            --danger: #e74a3b;
+            --dark: #5a5c69;
+        }
+        
+        body {
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8f9fc;
+        }
+        
+        .dashboard-header {
+            padding: 20px 0;
+            border-bottom: 1px solid #e3e6f0;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 0.35rem;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            margin-bottom: 30px;
+            transition: transform 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-header {
+            background-color: #f8f9fc;
+            border-bottom: 1px solid #e3e6f0;
+            padding: 1rem 1.35rem;
+            font-weight: 600;
+            color: #4e73df;
+        }
+        
+        .sensor-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        
+        .sensor-unit {
+            font-size: 0.9rem;
+            color: #858796;
+        }
+        
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: 600;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            z-index: 1000;
+        }
+        
+        .connection-badge {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .connected {
+            background-color: rgba(28, 200, 138, 0.1);
+            color: var(--success);
+        }
+        
+        .disconnected {
+            background-color: rgba(231, 74, 59, 0.1);
+            color: var(--danger);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+        }
+        
+        .large-chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+        
+        .data-history {
+            font-size: 0.85rem;
+            color: #858796;
+        }
+        
+        .sensor-icon {
+            font-size: 1.5rem;
+            margin-right: 10px;
+            color: var(--primary);
+        }
+        
+        .alert-threshold {
+            position: absolute;
+            right: 20px;
+            top: 15px;
+            font-size: 0.8rem;
+        }
+        
+        /* Navigation */
+        .navbar {
+            background-color: #fff;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+        
+        .navbar-brand {
+            font-weight: 800;
+            color: #4e73df;
+        }
+        
+        /* History Modal Styles */
+        .history-chart {
+            height: 300px;
+            width: 100%;
+        }
+        
+        /* Utility Classes */
+        .hidden {
+            display: none;
+        }
+        
+        .text-success {
+            color: var(--success);
+        }
+        
+        .text-warning {
+            color: var(--warning);
+        }
+        
+        .text-danger {
+            color: var(--danger);
+        }
+        
+        /* Alert Styles */
+        .alert-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1100;
+            animation: slideIn 0.5s forwards, fadeOut 0.5s 2.5s forwards;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow hidden" id="main-nav">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-heartbeat"></i> IoT Health Monitor
+            </a>
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#dataHistoryModal">
+                        <i class="fas fa-history"></i> Data History
+                    </a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                        <span class="mr-2 d-none d-lg-inline text-gray-600 small" id="username-display">User</span>
+                        <i class="fas fa-user-circle fa-fw"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right">
+                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#profileModal">
+                            <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>
+                            Profile
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="#" id="logout-btn">
+                            <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
+                            Logout
+                        </a>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Sign In Page -->
+    <div id="signin-page" class="auth-container">
+        <div class="auth-header">
+            <div class="auth-logo">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <h2>Welcome Back!</h2>
+            <p>Sign in to access your IoT Health Dashboard</p>
+        </div>
+        
+        <form id="signin-form">
+            <div class="mb-3">
+                <label for="signin-email" class="form-label">Email or Username</label>
+                <input type="text" class="form-control" id="signin-email" required>
+            </div>
+            <div class="mb-3">
+                <label for="signin-password" class="form-label">Password</label>
+                <input type="password" class="form-control" id="signin-password" required>
+            </div>
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="remember-me">
+                <label class="form-check-label" for="remember-me">Remember me</label>
+            </div>
+            <button type="submit" class="btn btn-primary btn-auth w-100">Sign In</button>
+        </form>
+        
+        <div class="auth-footer">
+            Don't have an account? <span class="auth-link" onclick="showSignUp()">Sign Up</span>
+        </div>
+    </div>
+
+    <!-- Sign Up Page -->
+    <div id="signup-page" class="auth-container hidden">
+        <div class="auth-header">
+            <div class="auth-logo">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <h2>Create Account</h2>
+            <p>Register to access the IoT Health Dashboard</p>
+        </div>
+        
+        <form id="signup-form">
+            <div class="mb-3">
+                <label for="signup-name" class="form-label">Full Name</label>
+                <input type="text" class="form-control" id="signup-name" required>
+            </div>
+            <div class="mb-3">
+                <label for="signup-email" class="form-label">Email Address</label>
+                <input type="email" class="form-control" id="signup-email" required>
+            </div>
+            <div class="mb-3">
+                <label for="signup-phone" class="form-label">Phone Number</label>
+                <input type="tel" class="form-control" id="signup-phone" required>
+            </div>
+            <div class="mb-3">
+                <label for="signup-username" class="form-label">Username</label>
+                <input type="text" class="form-control" id="signup-username" required>
+            </div>
+            <div class="mb-3">
+                <label for="signup-password" class="form-label">Password</label>
+                <input type="password" class="form-control" id="signup-password" required>
+            </div>
+            <div class="mb-3">
+                <label for="signup-confirm-password" class="form-label">Confirm Password</label>
+                <input type="password" class="form-control" id="signup-confirm-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-auth w-100">Sign Up</button>
+        </form>
+        
+        <div class="auth-footer">
+            Already have an account? <span class="auth-link" onclick="showSignIn()">Sign In</span>
+        </div>
+    </div>
+
+    <!-- Dashboard Page (initially hidden) -->
+    <div id="dashboard-page" class="container-fluid hidden">
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="h3 mb-0 text-gray-800">
+                        <i class="fas fa-heartbeat text-primary"></i> IoT Health Monitoring Dashboard
+                    </h1>
+                </div>
+                <div class="col-lg-6 text-lg-right">
+                    <div class="text-muted" id="current-time">Loading...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dashboard Content -->
+        <div class="row">
+            <!-- Heart Rate Card -->
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-primary h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-heartbeat sensor-icon"></i>
+                            Heart Rate
+                        </div>
+                        <span class="alert-threshold">Normal: 60-100 bpm</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="sensor-value" id="hrData">--</div>
+                                <div class="sensor-unit">beats per minute</div>
+                                <div class="data-history mt-2">
+                                    <div>Last updated: <span id="hr-time">--</span></div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-heartbeat fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Temperature Card -->
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-info h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-thermometer-half sensor-icon"></i>
+                            Body Temperature
+                        </div>
+                        <span class="alert-threshold">Normal: 36.5-37.5°C</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="sensor-value" id="tempData">--</div>
+                                <div class="sensor-unit">degrees Celsius</div>
+                                <div class="data-history mt-2">
+                                    <div>Last updated: <span id="temp-time">--</span></div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-thermometer-half fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- GPS Location Card -->
+            <div class="col-xl-6 col-md-6 mb-4">
+                <div class="card border-left-danger h-100">
+                    <div class="card-header">
+                        <i class="fas fa-map-marker-alt sensor-icon"></i>
+                        Patient Location
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="sensor-value" id="gpsData">Waiting for data...</div>
+                                <div class="sensor-unit">Latitude, Longitude</div>
+                                <div class="data-history mt-3">
+                                    <div><strong>Last updated:</strong> <span id="gps-time">--</span></div>
+                                    <div><strong>Signal quality:</strong> <span id="gps-quality">--</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Second Row - ECG Monitoring -->
+        <div class="row">
+            <!-- ECG Card -->
+            <div class="col-12 mb-4">
+                <div class="card border-left-warning h-100">
+                    <div class="card-header">
+                        <i class="fas fa-heartbeat sensor-icon"></i>
+                        ECG Monitoring
+                    </div>
+                    <div class="card-body">
+                        <div class="large-chart-container">
+                            <canvas id="ecgChart"></canvas>
+                        </div>
+                        <div class="data-history mt-2 text-center">
+                            <div>Current value: <span id="ecgData">--</span></div>
+                            <div>Last updated: <span id="ecg-time">--</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Connection Status -->
+        <div class="connection-status disconnected" id="connectionStatus">
+            <span class="connection-badge"></span>
+            <span id="connectionText">Disconnected from MQTT</span>
+        </div>
+    </div>
+
+    <!-- Data History Modal -->
+    <div class="modal fade" id="dataHistoryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Sensor Data History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="nav nav-tabs" id="historyTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="hr-tab" data-bs-toggle="tab" data-bs-target="#hr-tab-pane" type="button">Heart Rate</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="temp-tab" data-bs-toggle="tab" data-bs-target="#temp-tab-pane" type="button">Temperature</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="ecg-tab" data-bs-toggle="tab" data-bs-target="#ecg-tab-pane" type="button">ECG</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="gps-tab" data-bs-toggle="tab" data-bs-target="#gps-tab-pane" type="button">GPS</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="historyTabContent">
+                        <div class="tab-pane fade show active" id="hr-tab-pane" role="tabpanel">
+                            <div class="chart-container mt-3">
+                                <canvas id="hrHistoryChart"></canvas>
+                            </div>
+                            <div class="table-responsive mt-3">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Value (bpm)</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="hrHistoryTable">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="temp-tab-pane" role="tabpanel">
+                            <div class="chart-container mt-3">
+                                <canvas id="tempHistoryChart"></canvas>
+                            </div>
+                            <div class="table-responsive mt-3">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Value (°C)</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tempHistoryTable">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="ecg-tab-pane" role="tabpanel">
+                            <div class="chart-container mt-3">
+                                <canvas id="ecgHistoryChart"></canvas>
+                            </div>
+                            <div class="table-responsive mt-3">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ecgHistoryTable">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="gps-tab-pane" role="tabpanel">
+                            <div class="table-responsive mt-3">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Latitude</th>
+                                            <th>Longitude</th>
+                                            <th>Location</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="gpsHistoryTable">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-danger" id="clearHistoryBtn">Clear History</button>
+                    <button type="button" class="btn btn-primary" id="exportHistoryBtn">Export Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">User Profile</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <p id="profile-name">Loading...</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <p id="profile-email">Loading...</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone</label>
+                        <p id="profile-phone">Loading...</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <p id="profile-username">Loading...</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Member Since</label>
+                        <p id="profile-created">Loading...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // User accounts storage (in a real app, this would be server-side)
+        const userAccounts = JSON.parse(localStorage.getItem('iotHealthUsers')) || [];
+        let currentUser = null;
+        let activeSessions = JSON.parse(localStorage.getItem('activeSessions')) || {};
+
+        // DOM Elements
+        const signinPage = document.getElementById('signin-page');
+        const signupPage = document.getElementById('signup-page');
+        const dashboardPage = document.getElementById('dashboard-page');
+        const signinForm = document.getElementById('signin-form');
+        const signupForm = document.getElementById('signup-form');
+        const mainNav = document.getElementById('main-nav');
+        const logoutBtn = document.getElementById('logout-btn');
+        const usernameDisplay = document.getElementById('username-display');
+
+        // MQTT Configuration
+        const mqttServer = "wss://0837cab1a99f49019b6ff31a0b6b3d44.s1.eu.hivemq.cloud:8884/mqtt";
+        const mqttOptions = {
+            username: "admin",
+            password: "Pass@123",
+            connectTimeout: 4000,
+            clientId: 'webclient_' + Math.random().toString(16).substr(2, 8),
+            keepalive: 60,
+            clean: true,
+            reconnectPeriod: 1000,
+        };
+        
+        // Data storage configuration
+        const storageConfig = {
+            saveInterval: 1 * 60 * 1000, // 1 minute in milliseconds
+            maxRecords: 1000 // Maximum records to keep per sensor
+        };
+
+        // Data storage - Will be initialized per user
+        let sensorData = {};
+
+        // Initialize data storage timers
+        let storageTimer;
+        let lastSaveTime = {
+            heartRate: 0,
+            temperature: 0,
+            ecg: 0,
+            gps: 0
+        };
+
+        // Data storage for trends
+        const hrHistory = {
+            timestamps: [],
+            values: []
+        };
+        
+        const ecgHistory = {
+            timestamps: [],
+            values: []
+        };
+        
+        // Initialize charts
+        let ecgChart, hrHistoryChart, tempHistoryChart, ecgHistoryChart;
+        
+        // Show alert message
+        function showAlert(message, type = 'success') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-message`;
+            alertDiv.textContent = message;
+            document.body.appendChild(alertDiv);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 3000);
+        }
+        
+        // Show Sign Up Page
+        function showSignUp() {
+            signinPage.classList.add('hidden');
+            signupPage.classList.remove('hidden');
+        }
+
+        // Show Sign In Page
+        function showSignIn() {
+            signupPage.classList.add('hidden');
+            signinPage.classList.remove('hidden');
+        }
+
+        // Show Dashboard
+        function showDashboard() {
+            signinPage.classList.add('hidden');
+            signupPage.classList.add('hidden');
+            mainNav.classList.remove('hidden');
+            dashboardPage.classList.remove('hidden');
+            
+            // Load user-specific data
+            loadUserData();
+            
+            // Initialize dashboard components
+            initCharts();
+            initMQTT();
+            updateCurrentTime();
+            updateProfileDisplay();
+            
+            // Initialize data storage timer
+            storageTimer = setInterval(() => {
+                if (currentUser) {
+                    saveUserData();
+                }
+            }, storageConfig.saveInterval);
+        }
+        
+        // Load user-specific data
+        function loadUserData() {
+            if (!currentUser) return;
+            
+            // Load sensor data specifically for this user
+            const userData = JSON.parse(localStorage.getItem(`userData_${currentUser.username}`)) || {};
+            
+            // Initialize with empty arrays if no data exists
+            sensorData = {
+                heartRate: userData.heartRate || [],
+                temperature: userData.temperature || [],
+                ecg: userData.ecg || [],
+                gps: userData.gps || []
+            };
+        }
+        
+        // Save user-specific data
+        function saveUserData() {
+            if (!currentUser) return;
+            
+            const userData = {
+                heartRate: sensorData.heartRate || [],
+                temperature: sensorData.temperature || [],
+                ecg: sensorData.ecg || [],
+                gps: sensorData.gps || [],
+                lastUpdated: new Date().toISOString()
+            };
+            
+            localStorage.setItem(`userData_${currentUser.username}`, JSON.stringify(userData));
+        }
+
+        // Store sensor data for current user only
+        function storeSensorData(type, value, timestamp) {
+            if (!currentUser) return;
+            
+            // Create data record
+            const record = {
+                value: value,
+                timestamp: timestamp,
+                date: new Date().toISOString()
+            };
+            
+            // Initialize sensorData for this type if it doesn't exist
+            if (!sensorData[type]) {
+                sensorData[type] = [];
+            }
+            
+            // Add to storage
+            sensorData[type].push(record);
+            
+            // Limit the number of stored records
+            if (sensorData[type].length > storageConfig.maxRecords) {
+                sensorData[type].shift();
+            }
+            
+            // Save to localStorage for current user only
+            const userData = JSON.parse(localStorage.getItem(`userData_${currentUser.username}`)) || {};
+            userData[type] = sensorData[type];
+            localStorage.setItem(`userData_${currentUser.username}`, JSON.stringify(userData));
+        }
+
+        // Initialize Charts
+        function initCharts() {
+            // Real-time ECG Chart
+            const ecgCtx = document.getElementById('ecgChart').getContext('2d');
+            ecgChart = new Chart(ecgCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'ECG Value',
+                        data: [],
+                        borderColor: 'rgba(78, 115, 223, 1)',
+                        backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    },
+                    animation: {
+                        duration: 0
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize History Charts
+        function initHistoryCharts() {
+            // Heart Rate History Chart
+            const hrCtx = document.getElementById('hrHistoryChart').getContext('2d');
+            hrHistoryChart = new Chart(hrCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Heart Rate (bpm)',
+                        data: [],
+                        borderColor: 'rgba(78, 115, 223, 1)',
+                        backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                        borderWidth: 1,
+                        pointRadius: 2,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+            
+            // Temperature History Chart
+            const tempCtx = document.getElementById('tempHistoryChart').getContext('2d');
+            tempHistoryChart = new Chart(tempCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Temperature (°C)',
+                        data: [],
+                        borderColor: 'rgba(54, 185, 204, 1)',
+                        backgroundColor: 'rgba(54, 185, 204, 0.05)',
+                        borderWidth: 1,
+                        pointRadius: 2,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+            
+            // ECG History Chart
+            const ecgHistCtx = document.getElementById('ecgHistoryChart').getContext('2d');
+            ecgHistoryChart = new Chart(ecgHistCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'ECG Readings',
+                        data: [],
+                        borderColor: 'rgba(246, 194, 62, 1)',
+                        backgroundColor: 'rgba(246, 194, 62, 0.05)',
+                        borderWidth: 1,
+                        pointRadius: 2,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update history charts
+        function updateHistoryCharts() {
+            // Update Heart Rate History Chart
+            if (hrHistoryChart) {
+                const hrLabels = sensorData.heartRate.map(item => item.timestamp);
+                const hrValues = sensorData.heartRate.map(item => item.value);
+                
+                hrHistoryChart.data.labels = hrLabels;
+                hrHistoryChart.data.datasets[0].data = hrValues;
+                hrHistoryChart.update();
+            }
+            
+            // Update Temperature History Chart
+            if (tempHistoryChart) {
+                const tempLabels = sensorData.temperature.map(item => item.timestamp);
+                const tempValues = sensorData.temperature.map(item => item.value);
+                
+                tempHistoryChart.data.labels = tempLabels;
+                tempHistoryChart.data.datasets[0].data = tempValues;
+                tempHistoryChart.update();
+            }
+            
+            // Update ECG History Chart
+            if (ecgHistoryChart) {
+                const ecgLabels = sensorData.ecg.map(item => item.timestamp);
+                const ecgValues = sensorData.ecg.map(item => item.value);
+                
+                ecgHistoryChart.data.labels = ecgLabels;
+                ecgHistoryChart.data.datasets[0].data = ecgValues;
+                ecgHistoryChart.update();
+            }
+            
+            // Update history tables
+            updateHistoryTables();
+        }
+
+        // Update history tables
+        function updateHistoryTables() {
+            // Heart Rate Table
+            const hrTableBody = document.getElementById('hrHistoryTable');
+            hrTableBody.innerHTML = sensorData.heartRate.slice().reverse().map(item => {
+                const status = getStatusForValue(item.value, { goodMin: 60, goodMax: 100, warnMin: 50, warnMax: 110 });
+                return `<tr>
+                    <td>${item.timestamp}</td>
+                    <td>${item.value}</td>
+                    <td class="text-${status.color}">${status.text}</td>
+                </tr>`;
+            }).join('');
+            
+            // Temperature Table
+            const tempTableBody = document.getElementById('tempHistoryTable');
+            tempTableBody.innerHTML = sensorData.temperature.slice().reverse().map(item => {
+                const status = getStatusForValue(item.value, { goodMin: 36.5, goodMax: 37.5, warnMin: 36, warnMax: 38 });
+                return `<tr>
+                    <td>${item.timestamp}</td>
+                    <td>${item.value}</td>
+                    <td class="text-${status.color}">${status.text}</td>
+                </tr>`;
+            }).join('');
+            
+            // ECG Table
+            const ecgTableBody = document.getElementById('ecgHistoryTable');
+            ecgTableBody.innerHTML = sensorData.ecg.slice().reverse().map(item => {
+                return `<tr>
+                    <td>${item.timestamp}</td>
+                    <td>${item.value}</td>
+                </tr>`;
+            }).join('');
+            
+            // GPS Table
+            const gpsTableBody = document.getElementById('gpsHistoryTable');
+            gpsTableBody.innerHTML = sensorData.gps.slice().reverse().map(item => {
+                return `<tr>
+                    <td>${item.timestamp}</td>
+                    <td>${item.value.lat}</td>
+                    <td>${item.value.lng}</td>
+                    <td><a href="https://maps.google.com/?q=${item.value.lat},${item.value.lng}" target="_blank">View on Map</a></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function getStatusForValue(value, thresholds) {
+            const numValue = parseFloat(value);
+            if (isNaN(numValue)) return { text: '--', color: 'secondary' };
+            
+            const { goodMin = -Infinity, goodMax = Infinity, warnMin = -Infinity, warnMax = Infinity } = thresholds;
+            
+            if (numValue >= goodMin && numValue <= goodMax) {
+                return { text: 'Normal', color: 'success' };
+            } else if ((numValue >= warnMin && numValue < goodMin) || (numValue > goodMax && numValue <= warnMax)) {
+                return { text: 'Warning', color: 'warning' };
+            } else {
+                return { text: 'Normal', color: 'danger' };
+            }
+        }
+
+        // Initialize MQTT Connection
+        function initMQTT() {
+            // Connect to MQTT broker
+            const client = mqtt.connect(mqttServer, mqttOptions);
+            
+            // Connection handlers
+            client.on("connect", () => {
+                console.log("Connected to MQTT Broker");
+                updateConnectionStatus(true);
+                
+                // Subscribe to topics
+                client.subscribe("sensors/gps");
+                client.subscribe("sensors/heart_rate");
+                client.subscribe("sensors/temperature");
+                client.subscribe("sensors/ecg");
+                
+                // Request retained messages
+                client.subscribe("sensors/#", { qos: 1 });
+            });
+            
+            client.on("error", (error) => {
+                console.error("Connection error:", error);
+                updateConnectionStatus(false);
+            });
+            
+            client.on("reconnect", () => {
+                console.log("Attempting to reconnect...");
+                updateConnectionStatus(false);
+            });
+            
+            client.on("offline", () => {
+                console.log("Client is offline");
+                updateConnectionStatus(false);
+            });
+            
+            client.on("close", () => {
+                console.log("Connection closed");
+                updateConnectionStatus(false);
+            });
+            
+            // Message handler
+            client.on("message", (topic, message) => {
+                const data = message.toString();
+                const now = new Date();
+                const timestamp = now.toLocaleTimeString();
+                
+                console.log(`Received from ${topic}:`, data);
+                
+                // Update UI based on topic
+                switch(topic) {
+                    case "sensors/gps":
+                        updateGpsData(data, timestamp);
+                        break;
+                        
+                    case "sensors/heart_rate":
+                        updateHeartRateData(data, timestamp);
+                        break;
+                        
+                    case "sensors/temperature":
+                        updateTemperatureData(data, timestamp);
+                        break;
+                        
+                    case "sensors/ecg":
+                        updateEcgData(data, timestamp);
+                        break;
+                }
+            });
+        }
+
+        // Update GPS data
+        function updateGpsData(data, timestamp) {
+            try {
+                const gpsData = JSON.parse(data);
+                if (gpsData.lat && gpsData.lng) {
+                    const lat = parseFloat(gpsData.lat).toFixed(6);
+                    const lng = parseFloat(gpsData.lng).toFixed(6);
+                    
+                    document.getElementById("gpsData").textContent = `${lat}, ${lng}`;
+                    document.getElementById("gps-time").textContent = timestamp;
+                    document.getElementById("gps-quality").textContent = "Good";
+                    
+                    // Store GPS data for current user only
+                    storeSensorData('gps', { lat, lng }, timestamp);
+                }
+            } catch (e) {
+                console.error("Error parsing GPS data:", e);
+            }
+        }
+        
+        // Update Heart Rate data
+        function updateHeartRateData(data, timestamp) {
+            try {
+                const hrData = JSON.parse(data);
+                let displayText = "--";
+                
+                if (hrData.bpm) {
+                    displayText = hrData.bpm;
+                    storeSensorData('heartRate', hrData.bpm, timestamp);
+                }
+                
+                document.getElementById("hrData").textContent = displayText;
+                document.getElementById("hr-time").textContent = timestamp;
+                updateValueColor("hrData", displayText, { goodMin: 60, goodMax: 100, warnMin: 50, warnMax: 110 });
+                
+            } catch (e) {
+                console.error("Error parsing heart rate data:", e);
+                document.getElementById("hrData").textContent = data;
+                document.getElementById("hr-time").textContent = timestamp;
+            }
+        }
+        
+        // Update Temperature data
+        function updateTemperatureData(data, timestamp) {
+            try {
+                const tempData = JSON.parse(data);
+                const tempValue = tempData.temp ? tempData.temp : data;
+                
+                document.getElementById("tempData").textContent = tempValue;
+                document.getElementById("temp-time").textContent = timestamp;
+                updateValueColor("tempData", tempValue, { goodMin: 36.5, goodMax: 37.1, warnMin: 37.5, warnMax: 38.5 });
+                
+                // Store temperature data for current user only
+                storeSensorData('temperature', tempValue, timestamp);
+                
+            } catch (e) {
+                console.error("Error parsing temperature data:", e);
+                document.getElementById("tempData").textContent = data;
+                document.getElementById("temp-time").textContent = timestamp;
+            }
+        }
+        
+        // Update ECG data
+        function updateEcgData(data, timestamp) {
+            try {
+                const ecgData = JSON.parse(data);
+                const ecgValue = ecgData.ecg ? ecgData.ecg : data;
+                
+                document.getElementById("ecgData").textContent = ecgValue;
+                document.getElementById("ecg-time").textContent = timestamp;
+                
+                // Add to ECG history
+                ecgHistory.values.push(parseInt(ecgValue));
+                ecgHistory.timestamps.push(timestamp);
+                
+                // Keep only last 50 readings for smoother display
+                if (ecgHistory.values.length > 50) {
+                    ecgHistory.values.shift();
+                    ecgHistory.timestamps.shift();
+                }
+                
+                // Update ECG chart
+                updateEcgChart();
+                
+               // Store ECG data for current user only
+               storeSensorData('ecg', ecgValue, timestamp);
+                
+            } catch (e) {
+                console.error("Error parsing ECG data:", e);
+                document.getElementById("ecgData").textContent = data;
+                document.getElementById("ecg-time").textContent = timestamp;
+            }
+        }
+        
+        // Update connection status UI
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById("connectionStatus");
+            const badge = statusElement.querySelector('.connection-badge');
+            const textElement = document.getElementById("connectionText");
+            
+            if (connected) {
+                statusElement.className = "connection-status connected";
+                badge.style.backgroundColor = "#1cc88a";
+                textElement.textContent = "Connected to MQTT Broker";
+            } else {
+                statusElement.className = "connection-status disconnected";
+                badge.style.backgroundColor = "#e74a3b";
+                textElement.textContent = "Disconnected from MQTT";
+            }
+        }
+        
+        // Update value color based on thresholds
+        function updateValueColor(elementId, value, thresholds = {}) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            const numValue = parseFloat(value);
+            if (isNaN(numValue)) return;
+            
+            const { goodMin = -Infinity, goodMax = Infinity, warnMin = -Infinity, warnMax = Infinity } = thresholds;
+            
+            if (numValue >= goodMin && numValue <= goodMax) {
+                element.style.color = "#1cc88a"; // Green for normal
+            } else if ((numValue >= warnMin && numValue < goodMin) || (numValue > goodMax && numValue <= warnMax)) {
+                element.style.color = "#f6c23e"; // Yellow for warning
+            } else {
+                element.style.color = "#1cc88a"; // Red for danger #e74a3b
+
+            }
+        }
+        
+        // Update ECG chart
+        function updateEcgChart() {
+            ecgChart.data.labels = ecgHistory.timestamps;
+            ecgChart.data.datasets[0].data = ecgHistory.values;
+            ecgChart.update();
+        }
+        
+        // Update current time
+        function updateCurrentTime() {
+            const now = new Date();
+            document.getElementById("current-time").textContent = now.toLocaleString();
+            setTimeout(updateCurrentTime, 1000);
+        }
+        
+        // Update profile display
+        function updateProfileDisplay() {
+            if (currentUser) {
+                usernameDisplay.textContent = currentUser.name;
+                
+                // Set profile modal data
+                document.getElementById('profile-name').textContent = currentUser.name;
+                document.getElementById('profile-email').textContent = currentUser.email;
+                document.getElementById('profile-phone').textContent = currentUser.phone;
+                document.getElementById('profile-username').textContent = currentUser.username;
+                document.getElementById('profile-created').textContent = new Date(currentUser.createdAt).toLocaleDateString();
+            }
+        }
+
+        // Handle Sign Up
+        signupForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('signup-name').value;
+            const email = document.getElementById('signup-email').value;
+            const phone = document.getElementById('signup-phone').value;
+            const username = document.getElementById('signup-username').value;
+            const password = document.getElementById('signup-password').value;
+            const confirmPassword = document.getElementById('signup-confirm-password').value;
+
+            // Validate passwords match
+            if (password !== confirmPassword) {
+                alert('Passwords do not match!');
+                return;
+            }
+
+            // Check if username/email already exists
+            if (userAccounts.some(user => user.username === username || user.email === email)) {
+                alert('Username or email already exists!');
+                return;
+            }
+
+            // Create new user
+            const newUser = {
+                name,
+                email,
+                phone,
+                username,
+                password, // Note: In a real app, you would hash the password
+                createdAt: new Date().toISOString()
+            };
+
+            // Save user
+            userAccounts.push(newUser);
+            localStorage.setItem('iotHealthUsers', JSON.stringify(userAccounts));
+            
+            alert('Account created successfully! Please sign in.');
+            showSignIn();
+            signupForm.reset();
+        });
+
+        // Handle Sign In
+        signinForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const identifier = document.getElementById('signin-email').value;
+            const password = document.getElementById('signin-password').value;
+
+            // Find user by username or email
+            const user = userAccounts.find(user => 
+                user.username === identifier || user.email === identifier
+            );
+
+            if (!user || user.password !== password) {
+                alert('Invalid credentials!');
+                return;
+            }
+
+            // Successful login
+            currentUser = user;
+            
+            // Remember me functionality
+            if (document.getElementById('remember-me').checked) {
+                localStorage.setItem('currentIotHealthUser', JSON.stringify(user));
+            } else {
+                sessionStorage.setItem('currentIotHealthUser', JSON.stringify(user));
+            }
+            
+            // Clear any previous sensor data before showing dashboard
+            sensorData = {};
+            
+            // Show dashboard
+            showDashboard();
+        });
+
+        // Handle Logout
+        logoutBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Clear user session
+            localStorage.removeItem('currentIotHealthUser');
+            sessionStorage.removeItem('currentIotHealthUser');
+            currentUser = null;
+            
+            // Clear the storage timer
+            clearInterval(storageTimer);
+            
+            // Show sign in page
+            signinPage.classList.remove('hidden');
+            mainNav.classList.add('hidden');
+            dashboardPage.classList.add('hidden');
+            
+            // Reset sign in form
+            signinForm.reset();
+        });
+
+        // Clear History Button
+        document.getElementById('clearHistoryBtn').addEventListener('click', function() {
+            if (confirm('Are you sure you want to clear all history data? This cannot be undone.')) {
+                sensorData = {
+                    heartRate: [],
+                    temperature: [],
+                    ecg: [],
+                    gps: []
+                };
+                
+                if (currentUser) {
+                    localStorage.setItem(`userData_${currentUser.username}`, JSON.stringify(sensorData));
+                }
+                
+                updateHistoryCharts();
+                showAlert('History data cleared successfully!', 'success');
+            }
+        });
+
+        // Export History Button
+        document.getElementById('exportHistoryBtn').addEventListener('click', function() {
+            const dataStr = JSON.stringify(sensorData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `iot-health-data-${currentUser.username}-${new Date().toISOString().slice(0,10)}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            
+            showAlert('Data exported successfully!', 'success');
+        });
+
+        // Initialize history charts when modal is shown
+        document.getElementById('dataHistoryModal').addEventListener('shown.bs.modal', function() {
+            initHistoryCharts();
+            updateHistoryCharts();
+        });
+
+        // Check if user is already logged in
+        function checkLoggedIn() {
+            // Check sessionStorage first (temporary session)
+            let loggedInUser = sessionStorage.getItem('currentIotHealthUser');
+            
+            // If not in sessionStorage, check localStorage (remember me)
+            if (!loggedInUser) {
+                loggedInUser = localStorage.getItem('currentIotHealthUser');
+            }
+            
+            if (loggedInUser) {
+                currentUser = JSON.parse(loggedInUser);
+                // Clear any previous sensor data before loading new user's data
+                sensorData = {};
+                showDashboard();
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkLoggedIn();
+        });
+    </script>
+</body>
+</html>
